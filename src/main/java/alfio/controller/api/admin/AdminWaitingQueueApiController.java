@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
 import static alfio.model.system.ConfigurationKeys.STOP_WAITING_QUEUE_SUBSCRIPTIONS;
 import static alfio.util.OptionalWrapper.optionally;
 import static java.util.Collections.singletonList;
+import static java.util.stream.Collectors.toList;
 
 @RestController
 @RequestMapping("/admin/api/event/{eventName}/waiting-queue")
@@ -69,7 +70,7 @@ public class AdminWaitingQueueApiController {
             .stream()
             .filter(tc -> !tc.isAccessRestricted())
             .map(tc -> new SaleableTicketCategory(tc, "", now, event, ticketReservationManager.countAvailableTickets(event, tc), tc.getMaxTickets(), null))
-            .collect(Collectors.toList());
+            .collect(toList());
         boolean active = EventUtil.checkWaitingQueuePreconditions(event, stcList, configurationManager, eventStatisticsManager.noSeatsAvailable());
         boolean paused = active && configurationManager.getBooleanConfigValue(Configuration.from(event.getOrganizationId(), event.getId(), STOP_WAITING_QUEUE_SUBSCRIPTIONS), false);
         Map<String, Boolean> result = new HashMap<>();
@@ -118,9 +119,18 @@ public class AdminWaitingQueueApiController {
 
     @RequestMapping(value = "/subscriber/{subscriberId}/restore", method = RequestMethod.PUT)
     public ResponseEntity<Map<String, Object>> restoreSubscriber(@PathVariable("eventName") String eventName,
-                                                                     @PathVariable("subscriberId") int subscriberId,
-                                                                     Principal principal) {
+                                                                 @PathVariable("subscriberId") int subscriberId,
+                                                                 Principal principal) {
         return performStatusModification(eventName, subscriberId, principal, WaitingQueueSubscription.Status.WAITING, WaitingQueueSubscription.Status.CANCELLED);
+    }
+
+    private static final List<String> FIXED_FIELDS = Arrays.asList("ID", "Creation", "Event", "Status", "Full Name", "First Name", "Last Name", "E-Mail", "Ticket Reservation Id", "Language", "Selected category", "Subscription type");
+
+    @RequestMapping("/fields")
+    public List<SerializablePair<String, String>> getAllFields(@PathVariable("eventName") String eventName) {
+        List<SerializablePair<String, String>> fields = new ArrayList<>();
+        fields.addAll(FIXED_FIELDS.stream().map(f -> SerializablePair.of(f, f)).collect(toList()));
+        return fields;
     }
 
     private ResponseEntity<Map<String, Object>> performStatusModification(String eventName, int subscriberId,

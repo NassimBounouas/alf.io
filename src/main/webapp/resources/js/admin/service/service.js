@@ -167,6 +167,9 @@
             getFields : function(eventName) {
                 return $http['get']('/admin/api/events/'+eventName+'/fields');
             },
+            getWaitingQueueFields : function(eventName) {
+                return $http['get']('/admin/api/event/'+eventName+'/waiting-queue/fields');
+            },
             getAdditionalFields: function(eventName) {
                 return $http.get('/admin/api/events/'+eventName+'/additional-field').error(HttpErrorHandler.handle);
             },

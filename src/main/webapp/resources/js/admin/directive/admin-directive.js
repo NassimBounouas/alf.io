@@ -904,6 +904,11 @@
                             ctrl.openFieldSelectionModal = function() {
                                 EventService.exportAttendees(ctrl.event);
                             };
+
+                            ctrl.waitingQueueDownloadFieldsSelectionModal = function() {
+                                EventService.waitingQueueDownloadFieldsSelection(ctrl.event);
+                            };
+
                             ctrl.downloadSponsorsScan = function() {
                                 var pathName = $window.location.pathname;
                                 if(!pathName.endsWith("/")) {
