@@ -1,16 +1,16 @@
 /**
  * This file is part of alf.io.
- *
+ * <p>
  * alf.io is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- *
+ * <p>
  * alf.io is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
+ * <p>
  * You should have received a copy of the GNU General Public License
  * along with alf.io.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -30,12 +30,15 @@ import alfio.model.system.ConfigurationKeys;
 import alfio.util.EventUtil;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import org.apache.commons.lang3.Validate;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.security.Principal;
 import java.time.ZonedDateTime;
 import java.util.*;
@@ -93,7 +96,7 @@ public class AdminWaitingQueueApiController {
     @RequestMapping(value = "/count", method = RequestMethod.GET)
     public Integer countWaitingPeople(@PathVariable("eventName") String eventName, Principal principal, HttpServletResponse response) {
         Optional<Integer> count = optionally(() -> eventManager.getSingleEvent(eventName, principal.getName())).map(e -> waitingQueueManager.countSubscribers(e.getId()));
-        if(count.isPresent()) {
+        if (count.isPresent()) {
             return count.get();
         }
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -103,7 +106,7 @@ public class AdminWaitingQueueApiController {
     @RequestMapping(value = "/load", method = RequestMethod.GET)
     public List<WaitingQueueSubscription> loadAllSubscriptions(@PathVariable("eventName") String eventName, Principal principal, HttpServletResponse response) {
         Optional<List<WaitingQueueSubscription>> count = optionally(() -> eventManager.getSingleEvent(eventName, principal.getName())).map(e -> waitingQueueManager.loadAllSubscriptionsForEvent(e.getId()));
-        if(count.isPresent()) {
+        if (count.isPresent()) {
             return count.get();
         }
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -124,18 +127,39 @@ public class AdminWaitingQueueApiController {
         return performStatusModification(eventName, subscriberId, principal, WaitingQueueSubscription.Status.WAITING, WaitingQueueSubscription.Status.CANCELLED);
     }
 
-    private static final List<String> FIXED_FIELDS = Arrays.asList("ID", "Creation", "Event", "Status", "Full Name", "First Name", "Last Name", "E-Mail", "Ticket Reservation Id", "Language", "Selected category", "Subscription type");
-
     @RequestMapping("/fields")
     public List<SerializablePair<String, String>> getAllFields(@PathVariable("eventName") String eventName) {
         List<SerializablePair<String, String>> fields = new ArrayList<>();
-        fields.addAll(FIXED_FIELDS.stream().map(f -> SerializablePair.of(f, f)).collect(toList()));
+        fields.addAll(WaitingQueueDownloader.availableFields().stream().map(f -> SerializablePair.of(f, f)).collect(toList()));
         return fields;
     }
 
+    private Event loadEvent(String eventName, Principal principal) {
+        Optional<Event> singleEvent = optionally(() -> eventManager.getSingleEvent(eventName, principal.getName()));
+        Validate.isTrue(singleEvent.isPresent(), "event not found");
+        return singleEvent.get();
+    }
+
+    @RequestMapping("/export")
+    public void downloadWaitingQueue(@PathVariable("eventName") String eventName, @RequestParam(name = "format", defaultValue = "excel") String format, HttpServletRequest request, HttpServletResponse response, Principal principal) throws IOException {
+        List<String> fields = Arrays.asList(Optional.ofNullable(request.getParameterValues("fields")).orElse(new String[]{}));
+        Event event = loadEvent(eventName, principal);
+        System.out.println("*** CALL ***");
+        fields.stream().forEach(System.out::println);
+        System.out.println(event.getDisplayName());
+        /*Map<Integer, TicketCategory> categoriesMap = eventManager.loadTicketCategories(event).stream().collect(Collectors.toMap(TicketCategory::getId, Function.identity()));
+        ZoneId eventZoneId = event.getZoneId();
+
+        if ("excel".equals(format)) {
+            exportTicketExcel(eventName, response, principal, fields, categoriesMap, eventZoneId);
+        } else {
+            exportTicketCSV(eventName, response, principal, fields, categoriesMap, eventZoneId);
+        }*/
+    }
+
     private ResponseEntity<Map<String, Object>> performStatusModification(String eventName, int subscriberId,
-                                                                               Principal principal, WaitingQueueSubscription.Status newStatus,
-                                                                               WaitingQueueSubscription.Status currentStatus) {
+                                                                          Principal principal, WaitingQueueSubscription.Status newStatus,
+                                                                          WaitingQueueSubscription.Status currentStatus) {
         return optionally(() -> eventManager.getSingleEvent(eventName, principal.getName()))
             .flatMap(e -> waitingQueueManager.updateSubscriptionStatus(subscriberId, newStatus, currentStatus).map(s -> Pair.of(s, e)))
             .map(pair -> {
