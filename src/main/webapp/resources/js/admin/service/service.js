@@ -236,6 +236,50 @@
                 return modal.result;
             },
 
+            exportWaitingQueue: function(event) {
+                var modal = $uibModal.open({
+                    size:'lg',
+                    templateUrl:'/resources/angular-templates/admin/partials/event/fragment/waiting-queue-select-field-modal.html',
+                    backdrop: 'static',
+                    controller: function($scope) {
+                        $scope.selected = {};
+                        $scope.format = 'excel';
+                        service.getWaitingQueueFields(event.shortName).then(function(fields) {
+                            $scope.fields = fields.data;
+                            angular.forEach(fields.data, function(v) {
+                                $scope.selected[v.key] = false;
+                            })
+                        });
+
+                        $scope.selectAll = function() {
+                            angular.forEach($scope.selected, function(v,k) {
+                                $scope.selected[k] = true;
+                            });
+                        };
+
+                        $scope.deselectAll = function() {
+                            angular.forEach($scope.selected, function(v,k) {
+                                $scope.selected[k] = false;
+                            });
+                        };
+
+                        $scope.download = function() {
+                            var queryString = "format="+$scope.format+"&";
+                            angular.forEach($scope.selected, function(v,k) {
+                                if(v) {
+                                    queryString+="fields="+k+"&";
+                                }
+                            });
+                            var pathName = $window.location.pathname;
+                            if(!pathName.endsWith("/")) {
+                                pathName = pathName + "/";
+                            }
+                            $window.open(pathName+"api/events/"+event.shortName+"/export.csv?"+queryString);
+                        };
+                    }
+                });
+            },
+
             exportAttendees: function(event) {
                 var modal = $uibModal.open({
                     size:'lg',

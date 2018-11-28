@@ -906,7 +906,7 @@
                             };
 
                             ctrl.waitingQueueDownloadFieldsSelectionModal = function() {
-                                EventService.waitingQueueDownloadFieldsSelection(ctrl.event);
+                                EventService.exportWaitingQueue(ctrl.event);
                             };
 
                             ctrl.downloadSponsorsScan = function() {
