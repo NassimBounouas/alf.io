@@ -1,12 +1,28 @@
 package alfio.controller.api.admin;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 public class WaitingQueueDownloader {
-    private static final List<String> FIXED_FIELDS = Arrays.asList("ID", "Creation", "Event", "Status", "Full Name", "First Name", "Last Name", "E-Mail", "Ticket Reservation Id", "Language", "Selected category", "Subscription type");
+    private Map<String, String> map;
 
-    public static List<String> availableFields() {
-        return FIXED_FIELDS;
+    public WaitingQueueDownloader() {
+        map = new HashMap<>();
+        map.put("id", "ID");
+        map.put("creation", "Creation");
+        map.put("event", "Event");
+        map.put("status", "Status");
+        map.put("fullname", "Full Name");
+        map.put("firstname", "First Name");
+        map.put("lastname", "Last Name");
+        map.put("email", "E-Mail");
+        map.put("ticket_reservation_id", "Ticket Reservation Id");
+        map.put("language", "Language");
+        map.put("selected_category", "Selected category");
+        map.put("subscription_type", "Subscription type");
+    }
+
+    public Map<String, String> availableFields() {
+        return this.map;
     }
 }

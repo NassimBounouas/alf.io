@@ -246,8 +246,8 @@
                         $scope.format = 'excel';
                         service.getWaitingQueueFields(event.shortName).then(function(fields) {
                             $scope.fields = fields.data;
-                            angular.forEach(fields.data, function(v) {
-                                $scope.selected[v.key] = false;
+                            angular.forEach(fields.data, function(key, value) {
+                                $scope.selected[key] = false;
                             })
                         });
 

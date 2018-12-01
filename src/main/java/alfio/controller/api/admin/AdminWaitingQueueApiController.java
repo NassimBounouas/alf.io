@@ -128,10 +128,8 @@ public class AdminWaitingQueueApiController {
     }
 
     @RequestMapping("/fields")
-    public List<SerializablePair<String, String>> getAllFields(@PathVariable("eventName") String eventName) {
-        List<SerializablePair<String, String>> fields = new ArrayList<>();
-        fields.addAll(WaitingQueueDownloader.availableFields().stream().map(f -> SerializablePair.of(f, f)).collect(toList()));
-        return fields;
+    public Map<String, String> getAllFields(@PathVariable("eventName") String eventName) {
+        return new WaitingQueueDownloader().availableFields();
     }
 
     private Event loadEvent(String eventName, Principal principal) {

@@ -3,7 +3,7 @@
 </div>
 <div class="modal-body">
     <ul style="list-style-type:none;padding:0">
-        <li data-ng-repeat="field in fields"><label><input type="checkbox" ng-model="selected[field.key]"> {{field.value}}</label></li>
+        <li data-ng-repeat="(key, value) in fields"><label><input type="checkbox" ng-model="selected[key]">{{value}}</label></li>
     </ul>
     <hr>
     <p>
