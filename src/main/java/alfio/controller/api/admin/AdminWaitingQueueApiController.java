@@ -142,9 +142,11 @@ public class AdminWaitingQueueApiController {
     public void downloadWaitingQueue(@PathVariable("eventName") String eventName, @RequestParam(name = "format", defaultValue = "excel") String format, HttpServletRequest request, HttpServletResponse response, Principal principal) throws IOException {
         List<String> fields = Arrays.asList(Optional.ofNullable(request.getParameterValues("fields")).orElse(new String[]{}));
         Event event = loadEvent(eventName, principal);
+        List<WaitingQueueSubscription> subscriptions = waitingQueueManager.loadAllSubscriptionsForEvent(event.getId());
         System.out.println("*** CALL ***");
         fields.stream().forEach(System.out::println);
         System.out.println(event.getDisplayName());
+        new WaitingQueueDownloader().extractDataToExport(subscriptions, fields);
         /*Map<Integer, TicketCategory> categoriesMap = eventManager.loadTicketCategories(event).stream().collect(Collectors.toMap(TicketCategory::getId, Function.identity()));
         ZoneId eventZoneId = event.getZoneId();
 
