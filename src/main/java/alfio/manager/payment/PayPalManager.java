@@ -14,13 +14,13 @@
  * You should have received a copy of the GNU General Public License
  * along with alf.io.  If not, see <http://www.gnu.org/licenses/>.
  */
-package alfio.manager;
+package alfio.manager.payment;
 
 import alfio.manager.support.FeeCalculator;
 import alfio.manager.support.PaymentResult;
 import alfio.manager.system.ConfigurationManager;
-import alfio.model.*;
 import alfio.model.Event;
+import alfio.model.*;
 import alfio.model.system.Configuration;
 import alfio.model.system.ConfigurationKeys;
 import alfio.model.transaction.*;
@@ -35,9 +35,9 @@ import alfio.util.ErrorsCode;
 import alfio.util.MonetaryUtil;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.paypal.api.payments.*;
 import com.paypal.api.payments.Currency;
 import com.paypal.api.payments.Transaction;
+import com.paypal.api.payments.*;
 import com.paypal.base.rest.APIContext;
 import com.paypal.base.rest.PayPalRESTException;
 import lombok.AllArgsConstructor;
@@ -76,7 +76,7 @@ public class PayPalManager implements PaymentProvider, ExternalProcessing, Refun
     private final TicketRepository ticketRepository;
     private final TransactionRepository transactionRepository;
 
-    private APIContext getApiContext(Event event) {
+    private APIContext getApiContext(EventAndOrganizationId event) {
         int orgId = event.getOrganizationId();
         boolean isLive = configurationManager.getBooleanConfigValue(Configuration.from(orgId, ConfigurationKeys.PAYPAL_LIVE_MODE), false);
         String clientId = configurationManager.getRequiredValue(Configuration.from(orgId, ConfigurationKeys.PAYPAL_CLIENT_ID));
@@ -152,7 +152,7 @@ public class PayPalManager implements PaymentProvider, ExternalProcessing, Refun
         payment.setTransactions(transactions);
         RedirectUrls redirectUrls = new RedirectUrls();
 
-        String baseUrl = StringUtils.removeEnd(configurationManager.getRequiredValue(Configuration.from(spec.getEvent().getOrganizationId(), spec.getEvent().getId(), ConfigurationKeys.BASE_URL)), "/");
+        String baseUrl = StringUtils.removeEnd(configurationManager.getRequiredValue(Configuration.from(spec.getEvent(), ConfigurationKeys.BASE_URL)), "/");
         String bookUrl = baseUrl+"/event/" + eventName + "/reservation/" + spec.getReservationId() + "/payment/paypal/{operation}";
 
         UriComponentsBuilder bookUrlBuilder = UriComponentsBuilder.fromUriString(bookUrl)
@@ -196,7 +196,7 @@ public class PayPalManager implements PaymentProvider, ExternalProcessing, Refun
         }
     }
 
-    private static final Set<String> MAPPED_ERROR = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("FAILED_TO_CHARGE_CC", "INSUFFICIENT_FUNDS", "EXPIRED_CREDIT_CARD", "INSTRUMENT_DECLINED")));
+    private static final Set<String> MAPPED_ERROR = Set.of("FAILED_TO_CHARGE_CC", "INSUFFICIENT_FUNDS", "EXPIRED_CREDIT_CARD", "INSTRUMENT_DECLINED");
 
     private static Optional<String> mappedException(PayPalRESTException e) {
         //https://developer.paypal.com/docs/api/#errors
@@ -211,7 +211,7 @@ public class PayPalManager implements PaymentProvider, ExternalProcessing, Refun
         return params.containsKey("payerId") && params.containsKey("paypalPaymentId");
     }
 
-    private Pair<String, String> commitPayment(String reservationId, PayPalToken payPalToken, Event event) throws PayPalRESTException {
+    private Pair<String, String> commitPayment(String reservationId, PayPalToken payPalToken, EventAndOrganizationId event) throws PayPalRESTException {
 
         Payment payment = new Payment().setId(payPalToken.getPaymentId());
         PaymentExecution paymentExecute = new PaymentExecution();
@@ -247,7 +247,7 @@ public class PayPalManager implements PaymentProvider, ExternalProcessing, Refun
         return Pair.of(captureId, payment.getId());
     }
 
-    private Optional<PaymentInformation> getInfo(String paymentId, String transactionId, Event event, Supplier<String> platformFeeSupplier) {
+    private Optional<PaymentInformation> getInfo(String paymentId, String transactionId, EventAndOrganizationId event, Supplier<String> platformFeeSupplier) {
         try {
             String refund = null;
 
@@ -332,7 +332,7 @@ public class PayPalManager implements PaymentProvider, ExternalProcessing, Refun
             if(hasTokens(map) && hasExactlyOneElementFor(map, "paypalPaymentId", "payerId", "hmac")) {
                 PayPalToken token = new PayPalToken(map.get("payerId").get(0), map.get("paypalPaymentId").get(0), map.get("hmac").get(0));
                 return new PaymentSpecification(reservation.getId(), token, reservationCost.getPriceWithVAT(),
-                    event, reservation.getEmail(), new CustomerName(reservation.getFullName(), reservation.getFirstName(), reservation.getLastName(), event),
+                    event, reservation.getEmail(), new CustomerName(reservation.getFullName(), reservation.getFirstName(), reservation.getLastName(), event.mustUseFirstAndLastName()),
                     reservation.getBillingAddress(), reservation.getCustomerReference(), Locale.forLanguageTag(reservation.getUserLanguage()),
                     reservation.isInvoiceRequested(), !reservation.isDirectAssignmentRequested(), orderSummary, reservation.getVatCountryCode(),
                     reservation.getVatNr(), reservation.getVatStatus(), map.containsKey("termAndConditionsAccepted"), map.containsKey("privacyPolicyAccepted"));
@@ -377,9 +377,10 @@ public class PayPalManager implements PaymentProvider, ExternalProcessing, Refun
                 Long gatewayFee = Optional.ofNullable(i.getFee()).map(Long::parseLong).orElse(0L);
                 return Pair.of(platformFee, gatewayFee);
             }).orElseGet(() -> Pair.of(0L, 0L));
+            transactionRepository.invalidateForReservation(spec.getReservationId());
             transactionRepository.insert(captureId, paymentId, spec.getReservationId(),
                 ZonedDateTime.now(), spec.getPriceWithVAT(), spec.getEvent().getCurrency(), "Paypal confirmation", PaymentProxy.PAYPAL.name(),
-                fees.getLeft(), fees.getRight());
+                fees.getLeft(), fees.getRight(), alfio.model.transaction.Transaction.Status.COMPLETE, Map.of());
             return PaymentResult.successful(captureId);
         } catch (Exception e) {
             log.warn("errow while processing paypal payment: " + e.getMessage(), e);

@@ -14,19 +14,10 @@
  * You should have received a copy of the GNU General Public License
  * along with alf.io.  If not, see <http://www.gnu.org/licenses/>.
  */
-package alfio.repository;
+package alfio.model.transaction;
 
-import alfio.model.AdditionalServiceDescription;
-import ch.digitalfondue.npjt.Bind;
-import ch.digitalfondue.npjt.Query;
-import ch.digitalfondue.npjt.QueryRepository;
-
-import java.util.List;
-
-@QueryRepository
-public interface AdditionalServiceDescriptionRepository {
-
-    @Query("insert into additional_service_description(additional_service_id_fk, locale, type, value) values(:additionalServiceId, :locale, :type, :value)")
-    int insert(@Bind("additionalServiceId") int additionalServiceId, @Bind("locale") String locale, @Bind("type") AdditionalServiceDescription.AdditionalServiceDescriptionType type, @Bind("value") String value);
-
+/**
+ * Marker interface for Payment Capabilities
+ */
+public interface Capability {
 }

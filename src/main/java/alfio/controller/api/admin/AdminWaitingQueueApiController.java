@@ -62,7 +62,7 @@ public class AdminWaitingQueueApiController {
 
     @RequestMapping(value = "/status", method = RequestMethod.GET)
     public Map<String, Boolean> getStatusForEvent(@PathVariable("eventName") String eventName, Principal principal) {
-        return optionally(() -> eventManager.getSingleEvent(eventName, principal.getName()))
+        return eventManager.getOptionalByName(eventName, principal.getName())
             .map(this::loadStatus)
             .orElse(Collections.emptyMap());
     }
@@ -75,7 +75,7 @@ public class AdminWaitingQueueApiController {
             .map(tc -> new SaleableTicketCategory(tc, "", now, event, ticketReservationManager.countAvailableTickets(event, tc), tc.getMaxTickets(), null))
             .collect(toList());
         boolean active = EventUtil.checkWaitingQueuePreconditions(event, stcList, configurationManager, eventStatisticsManager.noSeatsAvailable());
-        boolean paused = active && configurationManager.getBooleanConfigValue(Configuration.from(event.getOrganizationId(), event.getId(), STOP_WAITING_QUEUE_SUBSCRIPTIONS), false);
+        boolean paused = active && configurationManager.getBooleanConfigValue(Configuration.from(event, STOP_WAITING_QUEUE_SUBSCRIPTIONS), false);
         Map<String, Boolean> result = new HashMap<>();
         result.put("active", active);
         result.put("paused", paused);
@@ -84,7 +84,7 @@ public class AdminWaitingQueueApiController {
 
     @RequestMapping(value = "/status", method = RequestMethod.PUT)
     public Map<String, Boolean> setStatusForEvent(@PathVariable("eventName") String eventName, @RequestBody SetStatusForm form, Principal principal) {
-        return optionally(() -> eventManager.getSingleEvent(eventName, principal.getName()))
+        return eventManager.getOptionalByName(eventName, principal.getName())
             .map(event -> {
                 configurationManager.saveAllEventConfiguration(event.getId(), event.getOrganizationId(),
                     singletonList(new ConfigurationModification(null, ConfigurationKeys.STOP_WAITING_QUEUE_SUBSCRIPTIONS.name(), String.valueOf(form.status))),
@@ -95,8 +95,9 @@ public class AdminWaitingQueueApiController {
 
     @RequestMapping(value = "/count", method = RequestMethod.GET)
     public Integer countWaitingPeople(@PathVariable("eventName") String eventName, Principal principal, HttpServletResponse response) {
-        Optional<Integer> count = optionally(() -> eventManager.getSingleEvent(eventName, principal.getName())).map(e -> waitingQueueManager.countSubscribers(e.getId()));
-        if (count.isPresent()) {
+        Optional<Integer> count = eventManager.getOptionalEventAndOrganizationIdByName(eventName, principal.getName())
+            .map(e -> waitingQueueManager.countSubscribers(e.getId()));
+        if(count.isPresent()) {
             return count.get();
         }
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -105,8 +106,9 @@ public class AdminWaitingQueueApiController {
 
     @RequestMapping(value = "/load", method = RequestMethod.GET)
     public List<WaitingQueueSubscription> loadAllSubscriptions(@PathVariable("eventName") String eventName, Principal principal, HttpServletResponse response) {
-        Optional<List<WaitingQueueSubscription>> count = optionally(() -> eventManager.getSingleEvent(eventName, principal.getName())).map(e -> waitingQueueManager.loadAllSubscriptionsForEvent(e.getId()));
-        if (count.isPresent()) {
+        Optional<List<WaitingQueueSubscription>> count = eventManager.getOptionalEventAndOrganizationIdByName(eventName, principal.getName())
+            .map(e -> waitingQueueManager.loadAllSubscriptionsForEvent(e.getId()));
+        if(count.isPresent()) {
             return count.get();
         }
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -158,9 +160,9 @@ public class AdminWaitingQueueApiController {
     }
 
     private ResponseEntity<Map<String, Object>> performStatusModification(String eventName, int subscriberId,
-                                                                          Principal principal, WaitingQueueSubscription.Status newStatus,
-                                                                          WaitingQueueSubscription.Status currentStatus) {
-        return optionally(() -> eventManager.getSingleEvent(eventName, principal.getName()))
+                                                                               Principal principal, WaitingQueueSubscription.Status newStatus,
+                                                                               WaitingQueueSubscription.Status currentStatus) {
+        return eventManager.getOptionalEventAndOrganizationIdByName(eventName, principal.getName())
             .flatMap(e -> waitingQueueManager.updateSubscriptionStatus(subscriberId, newStatus, currentStatus).map(s -> Pair.of(s, e)))
             .map(pair -> {
                 Map<String, Object> out = new HashMap<>();

@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with alf.io.  If not, see <http://www.gnu.org/licenses/>.
  */
-package alfio.manager;
+package alfio.manager.payment;
 
 import alfio.manager.system.ConfigurationManager;
 import alfio.model.Event;
@@ -40,14 +40,14 @@ public class StripeCreditCardManagerTest {
     private ConfigurationManager configurationManager;
     private Event event;
 
-    private StripeCreditCardManager stripeCreditCardManager;
+    private BaseStripeManager stripeCreditCardManager;
 
     @BeforeEach
     void init() {
         configurationManager = mock(ConfigurationManager.class);
         TicketRepository ticketRepository = mock(TicketRepository.class);
         event = mock(Event.class);
-        stripeCreditCardManager = new StripeCreditCardManager(configurationManager, ticketRepository, null, null, null);
+        stripeCreditCardManager = new BaseStripeManager(configurationManager, null, ticketRepository,  null);
     }
 
     @Test
@@ -67,7 +67,7 @@ public class StripeCreditCardManagerTest {
 
     @Test
     void testApiConnectionException() {
-        assertEquals("error.STEP2_STRIPE_abort", stripeCreditCardManager.handleException(new APIConnectionException("abcd")));
+        assertEquals("error.STEP2_STRIPE_abort", stripeCreditCardManager.handleException(new ApiConnectionException("abcd")));
     }
 
     @Test
@@ -77,7 +77,7 @@ public class StripeCreditCardManagerTest {
 
     @Test
     void testMissingStripeConnectedId() {
-        Function<ConfigurationKeys, Configuration.ConfigurationPathKey> partial = Configuration.from(event.getOrganizationId(), event.getId());
+        Function<ConfigurationKeys, Configuration.ConfigurationPathKey> partial = Configuration.from(event);
         when(configurationManager.getBooleanConfigValue(partial.apply(PLATFORM_MODE_ENABLED), false)).thenReturn(true);
         when(configurationManager.getStringConfigValue(partial.apply(STRIPE_CONNECTED_ID))).thenReturn(Optional.empty());
         Optional<RequestOptions> options = stripeCreditCardManager.options(event);

@@ -197,15 +197,15 @@ public class CheckInManager {
 
     private TicketAndCheckInResult extractStatus(Optional<Event> maybeEvent, Optional<Ticket> maybeTicket, String ticketIdentifier, Optional<String> ticketCode) {
 
-        if (!maybeEvent.isPresent()) {
+        if (maybeEvent.isEmpty()) {
             return new TicketAndCheckInResult(null, new DefaultCheckInResult(EVENT_NOT_FOUND, "Event not found"));
         }
 
-        if (!maybeTicket.isPresent()) {
+        if (maybeTicket.isEmpty()) {
             return new TicketAndCheckInResult(null, new DefaultCheckInResult(TICKET_NOT_FOUND, "Ticket with uuid " + ticketIdentifier + " not found"));
         }
 
-        if(!ticketCode.filter(StringUtils::isNotEmpty).isPresent()) {
+        if(ticketCode.filter(StringUtils::isNotEmpty).isEmpty()) {
             return new TicketAndCheckInResult(null, new DefaultCheckInResult(EMPTY_TICKET_CODE, "Missing ticket code"));
         }
 
@@ -294,7 +294,7 @@ public class CheckInManager {
         }
     }
 
-    public List<Integer> getAttendeesIdentifiers(Event ev, Date changedSince, String username) {
+    public List<Integer> getAttendeesIdentifiers(EventAndOrganizationId ev, Date changedSince, String username) {
         return Optional.ofNullable(ev)
             .filter(EventManager.checkOwnership(username, organizationRepository))
             .filter(isOfflineCheckInEnabled())
@@ -316,12 +316,12 @@ public class CheckInManager {
             .orElse(Collections.emptyList());
     }
 
-    public Predicate<Event> isOfflineCheckInEnabled() {
-        return configurationManager.areBooleanSettingsEnabledForEvent(ALFIO_PI_INTEGRATION_ENABLED, OFFLINE_CHECKIN_ENABLED);
+    public Predicate<EventAndOrganizationId> isOfflineCheckInEnabled() {
+        return configurationManager.areBooleanSettingsEnabledForEvent(true, ALFIO_PI_INTEGRATION_ENABLED, OFFLINE_CHECKIN_ENABLED);
     }
 
-    public Predicate<Event> isOfflineCheckInAndLabelPrintingEnabled() {
-        return isOfflineCheckInEnabled().and(configurationManager.areBooleanSettingsEnabledForEvent(LABEL_PRINTING_ENABLED));
+    public Predicate<EventAndOrganizationId> isOfflineCheckInAndLabelPrintingEnabled() {
+        return isOfflineCheckInEnabled().and(configurationManager.areBooleanSettingsEnabledForEvent(true, LABEL_PRINTING_ENABLED));
     }
 
     public Map<String,String> getEncryptedAttendeesInformation(Event ev, Set<String> additionalFields, List<Integer> ids) {
@@ -406,8 +406,8 @@ public class CheckInManager {
             .orElse(null);
     }
 
-    private boolean areStatsEnabled(Event event) {
-        return configurationManager.getBooleanConfigValue(Configuration.from(event.getOrganizationId(), event.getId(), CHECK_IN_STATS), true);
+    private boolean areStatsEnabled(EventAndOrganizationId event) {
+        return configurationManager.getBooleanConfigValue(Configuration.from(event, CHECK_IN_STATS), true);
     }
 
     @Getter

@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with alf.io.  If not, see <http://www.gnu.org/licenses/>.
  */
-package alfio.manager;
+package alfio.manager.payment;
 
 import alfio.manager.support.PaymentResult;
 import alfio.manager.system.ConfigurationManager;
@@ -24,6 +24,7 @@ import alfio.model.transaction.PaymentContext;
 import alfio.model.transaction.PaymentMethod;
 import alfio.model.transaction.PaymentProvider;
 import alfio.repository.TicketReservationRepository;
+import alfio.repository.TransactionRepository;
 import alfio.util.WorkingDaysAdjusters;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -47,6 +48,7 @@ public class BankTransferManager implements PaymentProvider {
 
     private final ConfigurationManager configurationManager;
     private final TicketReservationRepository ticketReservationRepository;
+    private final TransactionRepository transactionRepository;
 
     @Override
     public boolean accept(PaymentMethod paymentMethod, PaymentContext paymentContext) {
@@ -58,6 +60,7 @@ public class BankTransferManager implements PaymentProvider {
     @Override
     public PaymentResult doPayment(PaymentSpecification spec) {
         transitionToOfflinePayment(spec);
+        PaymentManagerUtils.invalidateExistingTransactions(spec.getReservationId(), transactionRepository);
         return PaymentResult.successful(NOT_YET_PAID_TRANSACTION_ID);
     }
 
@@ -65,7 +68,7 @@ public class BankTransferManager implements PaymentProvider {
     public Map<String, ?> getModelOptions(PaymentContext context) {
         OptionalInt delay = getOfflinePaymentWaitingPeriod(context, configurationManager);
         Event event = context.getEvent();
-        if(!delay.isPresent()) {
+        if(delay.isEmpty()) {
             log.error("Already started event {} has been found with OFFLINE payment enabled" , event.getDisplayName());
         }
         Map<String, Object> model = new HashMap<>();
@@ -85,7 +88,7 @@ public class BankTransferManager implements PaymentProvider {
         Validate.isTrue(updatedReservation == 1, "expected exactly one updated reservation, got " + updatedReservation);
     }
 
-    static ZonedDateTime getOfflinePaymentDeadline(PaymentContext context, ConfigurationManager configurationManager) {
+    public static ZonedDateTime getOfflinePaymentDeadline(PaymentContext context, ConfigurationManager configurationManager) {
         Event event = context.getEvent();
         ZonedDateTime now = ZonedDateTime.now(event.getZoneId());
         int waitingPeriod = getOfflinePaymentWaitingPeriod(context, configurationManager).orElse( 0 );
@@ -98,7 +101,7 @@ public class BankTransferManager implements PaymentProvider {
         return now.plusDays(waitingPeriod).truncatedTo(ChronoUnit.HALF_DAYS).with(WorkingDaysAdjusters.defaultWorkingDays());
     }
 
-    static OptionalInt getOfflinePaymentWaitingPeriod(PaymentContext paymentContext, ConfigurationManager configurationManager) {
+    public static OptionalInt getOfflinePaymentWaitingPeriod(PaymentContext paymentContext, ConfigurationManager configurationManager) {
         Event event = paymentContext.getEvent();
         ZonedDateTime now = ZonedDateTime.now(event.getZoneId());
         ZonedDateTime eventBegin = event.getBegin();

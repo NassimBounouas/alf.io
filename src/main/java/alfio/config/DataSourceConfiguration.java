@@ -16,9 +16,12 @@
  */
 package alfio.config;
 
+import alfio.config.support.JSONColumnMapper;
 import alfio.config.support.PlatformProvider;
+import alfio.manager.FileDownloadManager;
 import alfio.manager.UploadedResourceManager;
 import alfio.manager.system.ConfigurationManager;
+import alfio.repository.user.OrganizationRepository;
 import alfio.util.TemplateManager;
 import ch.digitalfondue.npjt.QueryFactory;
 import ch.digitalfondue.npjt.QueryRepositoryScanner;
@@ -30,10 +33,14 @@ import org.flywaydb.core.api.MigrationVersion;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.context.ResourceLoaderAware;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.jdbc.core.namedparam.EmptySqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.AbstractDataSource;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -46,8 +53,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.web.servlet.view.mustache.jmustache.JMustacheTemplateLoader;
 
 import javax.sql.DataSource;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -67,12 +74,10 @@ public class DataSourceConfiguration implements ResourceLoaderAware {
     @Bean
     @Profile({"!"+Initializer.PROFILE_INTEGRATION_TEST, "travis"})
     public PlatformProvider getCloudProvider(Environment environment) {
-        PlatformProvider current = PLATFORM_PROVIDERS
-                                    .stream()
-                                    .filter(p -> p.isHosting(environment))
-                                    .findFirst()
-                                    .orElse(PlatformProvider.DEFAULT);
-        return current;
+        return PLATFORM_PROVIDERS.stream()
+                                 .filter(p -> p.isHosting(environment))
+                                 .findFirst()
+                                 .orElse(PlatformProvider.DEFAULT);
     }
 
     @Bean
@@ -88,8 +93,21 @@ public class DataSourceConfiguration implements ResourceLoaderAware {
             dataSource.setDriverClassName(platform.getDriverClassName(env));
             dataSource.setMaximumPoolSize(platform.getMaxActive(env));
             dataSource.setMinimumIdle(platform.getMinIdle(env));
+            dataSource.setConnectionTimeout(1000L);
 
             log.debug("Connection pool properties: max active {}, initial size {}", dataSource.getMaximumPoolSize(), dataSource.getMinimumIdle());
+
+            // check
+            boolean isSuperAdmin = Boolean.TRUE.equals(new NamedParameterJdbcTemplate(dataSource)
+                .queryForObject("select usesuper from pg_user where usename = CURRENT_USER",
+                    new EmptySqlParameterSource(),
+                    Boolean.class));
+
+            if (isSuperAdmin) {
+                log.warn("You're accessing the database using a superuser. This is highly discouraged since it will disable the row security policy checks.");
+            }
+
+            //
             return dataSource;
         }
     }
@@ -107,10 +125,11 @@ public class DataSourceConfiguration implements ResourceLoaderAware {
 
     @Bean
     public QueryFactory queryFactory(Environment env, PlatformProvider platform, NamedParameterJdbcTemplate namedParameterJdbcTemplate) {
-        QueryFactory qf = new QueryFactory(platform.getDialect(env), namedParameterJdbcTemplate);
-        qf.addColumnMapperFactory(new ZonedDateTimeMapper.Factory());
-        qf.addParameterConverters(new ZonedDateTimeMapper.Converter());
-        return qf;
+        return new QueryFactory(platform.getDialect(env), namedParameterJdbcTemplate)
+            .addColumnMapperFactory(new ZonedDateTimeMapper.Factory())
+            .addColumnMapperFactory(new JSONColumnMapper.Factory())
+            .addParameterConverters(new ZonedDateTimeMapper.Converter())
+            .addParameterConverters(new JSONColumnMapper.Converter());
     }
 
     @Bean
@@ -142,6 +161,7 @@ public class DataSourceConfiguration implements ResourceLoaderAware {
     public MessageSource messageSource() {
         ResourceBundleMessageSource source = new ResourceBundleMessageSource();
         source.setBasenames("alfio.i18n.public", "alfio.i18n.admin");
+        source.setDefaultEncoding(StandardCharsets.UTF_8.displayName());
         //since we have all the english translations in the default file, we don't need
         //the fallback to the system locale.
         source.setFallbackToSystemLocale(false);
@@ -163,6 +183,18 @@ public class DataSourceConfiguration implements ResourceLoaderAware {
         return loader;
     }
 
+    @Bean
+    @Profile("!"+Initializer.PROFILE_INTEGRATION_TEST)
+    public FileDownloadManager fileDownloadManager() {
+        return new FileDownloadManager();
+    }
+
+    @Bean
+    public RowLevelSecurity.RoleAndOrganizationsAspect getRoleAndOrganizationsAspect(NamedParameterJdbcTemplate namedParameterJdbcTemplate,
+                                                                                     OrganizationRepository organizationRepository) {
+        return new RowLevelSecurity.RoleAndOrganizationsAspect(namedParameterJdbcTemplate, organizationRepository);
+    }
+
     @Override
     public void setResourceLoader(ResourceLoader resourceLoader) {
         this.resourceLoader = resourceLoader;
@@ -173,12 +205,12 @@ public class DataSourceConfiguration implements ResourceLoaderAware {
      */
     private static class FakeCFDataSource extends AbstractDataSource {
         @Override
-        public Connection getConnection() throws SQLException {
+        public Connection getConnection() {
             return null;
         }
 
         @Override
-        public Connection getConnection(String username, String password) throws SQLException {
+        public Connection getConnection(String username, String password) {
             return null;
         }
     }
